@@ -1,6 +1,8 @@
 library(grid)
 library(png)
 
+`%+=%` = function(e1,e2) eval.parent(substitute(e1 <- e1 + e2))
+
 # read in data file 
 d = read.csv("/Users/caseynold/Desktop/STAT610/Unsupervised/kmeans/training_ss_151_blocks.csv")
 #remove the index from the image
@@ -10,16 +12,21 @@ n = dim(d)[1]
 #sample dimension
 p = dim(d)[2]
 # number of clusers
-k = 2
+k = 3
 # create responsibility matrix
-ri = matrix(0,nrow=n,ncol=k)
+# may need to start with some initial values
+ri = matrix(rnorm(k*p, mean=0.5,sd=0.5),nrow=n,ncol=k)
 # parameter matrices 
-mu = matrix(rnorm(n*1, mean=0.5,sd=0.5),nrow=n,ncol=k ) 
-sigma = matrix(rnorm(n*1, mean=0.5,sd=0.5),nrow=n,ncol=k ) 
-pi = matrix(rnorm(1*k,mean=0.5,sd=0.5), nrow = n,ncol=k ) 
 
+mu = matrix(rnorm(k*p, mean=0.5,sd=0.5),nrow=k,ncol=p ) 
+sigma = matrix(rnorm(k*p, mean=0.5,sd=0.5),nrow=k,ncol=p ) 
+pi = matrix(rnorm(k*p,mean=0.5,sd=0.5), nrow = k,ncol=p ) 
+
+m = matrix(0,nrow=k,ncol=p)
 #stochastic row matrix
-#pi = pi/rowSums(pi)
+pi = pi/rowSums(pi)
+
+
 #Repeat
 step = 0
 repeat{
@@ -27,37 +34,51 @@ repeat{
   
   #expectation: 1.) compute responsibilities
   for(i in 1:k){
-      ri[,i] = pi[,i] %*% dnorm(d,mu[i],sd=sqrt(sigma[i]),log=F)
+    #ri[,i] = pi[i] %*% dnorm(d[i,],mu[i],sd=sqrt(abs(sigma[i])),log=F)
+    ri[,i] = pi[i] %*% rnorm(d[i,],mu[i],sd=sigma[i],log=F)
   }
 
   ri = ri/rowSums(ri)
-  print(r)
+  #print(ri)
 
   #maximazation
-  # update pi
+  # weighted average of cluster membership
   rk = colSums(ri)
+  # update pi
   pi = rk/n  #notes  02/FEB/2017
- 
+  
+  m_t = matrix(0,nrow=n,ncol=p)
    # update mu
-   for(i in (1:n)){
-     for(j in 1:p){
-       for(m in (1:k)){
-         mu[i,m] = (ri[i,m]/rk[m]) * d[i,k]
-       }
-     }
+  dv_mu = 0
+  for(i in (1:k)){ 
+    for(j in (1:n)){
+      dv_mu %+=% (ri[j,i]) * d[j,]
+    }
+    mu[i] = (dv_mu/rk[i])
    }
   
+  dv_sig = 0
   #update sigma
-  for(i in 1:n){
-    for(j in 1:p){
-      for(m in 1:k){
-      sigma[i,m] = (ri[i,m]/rk[m])* (d[i,j] - mu[i,m])^2
-      }
+  for(i in 1:k){
+    for(j in 1:n){
+      dv_sig %+=% ri[j,i]* (d[j,] - mu[i,])^2
     }
+    sigma[i] = (dv_sig/rk[i])
   }
   
-  if(step == 3){
+  if(step == 50){
     break
   }
-  write.csv(mu,file="/Users/caseynold/Desktop/STAT610/Unsupervised/kmeans/em_means.csv")
 }
+
+r.new = rep(0,times=n)
+for(i in 1:n){
+  r.new[i] = which.max(ri[i,])
+}
+
+for (j in (1:k)){
+  if (sum(r.new==j)>0)
+    m[j,]=as.vector(colMeans(d[which(r.new==j),]))
+}
+ 
+write.csv(m,file="/Users/caseynold/Desktop/STAT610/Unsupervised/kmeans/em_means.csv")
