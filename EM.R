@@ -1,10 +1,10 @@
 library(grid)
 library(png)
-
+library(MASS)
 `%+=%` = function(e1,e2) eval.parent(substitute(e1 <- e1 + e2))
 
 # read in data file 
-d = read.csv("/Users/caseynold/Desktop/STAT610/Unsupervised/kmeans/training_ss_151_blocks.csv")
+d = read.csv("/Users/caseynold/Desktop/STAT610/Unsupervised/kmeans/data/training_ss_151_blocks.csv")
 #remove the index from the image
 d = as.matrix(d[,-1])
 #number of samples
@@ -14,13 +14,13 @@ p = dim(d)[2]
 # number of clusers
 k = 3
 # create responsibility matrix
-# may need to start with some initial values
-ri = matrix(rnorm(k*p, mean=0.5,sd=0.5),nrow=n,ncol=k)
-# parameter matrices 
+ri = matrix(rnorm(3, mean=0.5,sd=0.5),nrow=n,ncol=k)
 
-mu = matrix(rnorm(k*p, mean=0.5,sd=0.5),nrow=k,ncol=p ) 
-sigma = matrix(rnorm(k*p, mean=0.5,sd=0.5),nrow=k,ncol=p ) 
-pi = matrix(rnorm(k*p,mean=0.5,sd=0.5), nrow = k,ncol=p ) 
+# parameter matrices 
+#mu = matrix(rnorm(k*p, mean=0.5,sd=0.5),nrow=k,ncol=p ) 
+mu = matrix(c((1/255),(128/255),(220/255)),nrow=k,ncol=p ) 
+sigma = matrix(rnorm(3, mean=0.5,sd=0.5),nrow=k,ncol=p ) 
+pi = matrix(rnorm(3,mean=0.5,sd=0.5), nrow = k,ncol=1 ) # was p
 
 m = matrix(0,nrow=k,ncol=p)
 #stochastic row matrix
@@ -35,7 +35,9 @@ repeat{
   #expectation: 1.) compute responsibilities
   for(i in 1:k){
     #ri[,i] = pi[i] %*% dnorm(d[i,],mu[i],sd=sqrt(abs(sigma[i])),log=F)
-    ri[,i] = pi[i] %*% rnorm(d[i,],mu[i],sd=sigma[i],log=F)
+    #ri[,i] = pi[i] %*% rnorm(d[i,],mu[i],sd=sqrt(abs(sigma[i])))
+    ri[,i] = pi[i] %*% mvrnorm(1,mu[i],sigma[i])
+    #ri[,i] = ri_temp/rowSums(ri_temp)
   }
 
   ri = ri/rowSums(ri)
@@ -47,8 +49,7 @@ repeat{
   # update pi
   pi = rk/n  #notes  02/FEB/2017
   
-  m_t = matrix(0,nrow=n,ncol=p)
-   # update mu
+  # update mu
   dv_mu = 0
   for(i in (1:k)){ 
     for(j in (1:n)){
@@ -66,7 +67,7 @@ repeat{
     sigma[i] = (dv_sig/rk[i])
   }
   
-  if(step == 50){
+  if(step == 5){
     break
   }
 }
