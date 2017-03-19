@@ -18,9 +18,9 @@ data$membership <- 0
 dnum <- as.matrix(data[,1:25])
 # initialize means
 # picking 3 based on low, med, high
-M1 <- rep(1,25)
-M2 <- rep(128,25)
-M3 <- rep(255,25)
+M1 <- rep(1,25)/255
+M2 <- rep(128,25)/255
+M3 <- rep(255,25)/255
 
 # mixture p's
 PI1 <- .33
@@ -38,9 +38,9 @@ PI3 <- .34
 
 # checking the Diagnal matrix with variance of 230 to see if density is higher for mvdnorm
 
-sig1 <- diag(x=230,nrow = 25,ncol = 25)
-sig2 <- diag(x=230,nrow = 25,ncol = 25)
-sig3 <- diag(x=230,nrow = 25,ncol = 25)
+sig1 <- diag(x=.3,nrow = 25,ncol = 25)
+sig2 <- diag(x=.4,nrow = 25,ncol = 25)
+sig3 <- diag(x=.5,nrow = 25,ncol = 25)
 
 
 # initialize parameters
@@ -153,11 +153,11 @@ r <- matrix(0,nrow = n, ncol = 3)
 
 
 for(i in seq(dim(r)[1])){
+  b = PI[1]*dmvnorm(x = d[i,], mean = MU[[1]], sigma = SIGMA[[1]]) +
+      PI[2]*dmvnorm(x = d[i,], mean = MU[[2]], sigma = SIGMA[[2]]) +
+      PI[3]*dmvnorm(x = d[i,], mean = MU[[3]], sigma = SIGMA[[3]])
   for(k in length(PI)){
-    r[i,k] <- PI[1]*dmvnorm(x = d[i,], mean = MU[[1]], sigma = SIGMA[[1]])/
-      sum(PI[1]*dmvnorm(x = d[i,], mean = MU[[1]], sigma = SIGMA[[1]]),
-          PI[2]*dmvnorm(x = d[i,], mean = MU[[2]], sigma = SIGMA[[2]]),
-          PI[3]*dmvnorm(x = d[i,], mean = MU[[3]], sigma = SIGMA[[3]]))
+    r[i,k] <- PI[k]*dmvnorm(x = d[i,], mean = MU[[k]], sigma = SIGMA[[k]])/b
   }
 }
 
