@@ -1,13 +1,14 @@
-# K means on 151.csv from GetClusteringData.R
+# EM from Murphy p. 351 on 151.csv from GetClusteringData.R
 
 # cleanup
 #rm(list=ls())
 library(png)
 library(grid)
-#setwd("/Users/kramerPro/Google Drive/Graphical models stat II/code")
+library(MASS)
+library(mvtnorm)
 
 # data
-data <- read.csv("training_ss_151_blocks.csv")
+data <- read.csv("./BrunoData/training_ss_151_blocks.csv")
 
 # first dim is a repeat of index
 data <- data.frame(data[,2:26])
@@ -21,6 +22,34 @@ M1 <- rep(1,25)
 M2 <- rep(128,25)
 M3 <- rep(255,25)
 
+# mixture p's
+PI1 <- .33
+PI2 <- .33
+PI3 <- .34
+
+# initial Sigmas the A^t*A method may be producing too low prob
+
+# A1 <- matrix(runif(25*25),25)
+# sig1 <- t(A1)%*%A1
+# A2 <- matrix(runif(25*25),25)
+# sig2 <- t(A2)%*%A2
+# A3 <- matrix(runif(25*25),25)
+# sig3 <- t(A3)%*%A3
+
+# checking the Diagnal matrix with variance of 230 to see if density is higher for mvdnorm
+
+sig1 <- diag(x=230,nrow = 25,ncol = 25)
+sig2 <- diag(x=230,nrow = 25,ncol = 25)
+sig3 <- diag(x=230,nrow = 25,ncol = 25)
+
+
+# initialize parameters
+MU <- list(m1=M1,m2=M2,m3=M3) # list access element [[1]]
+PI <- c(PI1,PI2,PI3)
+SIGMA <- list(sig1, sig2, sig3)
+# can't figure how to include in a dataframe dims don't match
+
+#-----------> skip till after image is segmented for data dims
 
 # data is a row of data for use in apply
 mem <- function(drow,M1,M2,M3){
@@ -54,7 +83,7 @@ while(epsilon > 10){
 #  c = colMeans(a)
 
 ### getting the picture
-im=readPNG("training_ss_151.png")
+im=readPNG("./BrunoData/training_ss_151.png")
 grid.raster(im)
 
 ## im has 3 color channels. Since the original image is a grey level image
@@ -63,7 +92,7 @@ grid.raster(im)
 ## the second dimension is horizontal, left to right
 
 ## read the associated segmented image
-im.seg=readPNG("training_seg_151.png")
+im.seg=readPNG("./BrunoData/training_seg_151.png")
 grid.raster(im.seg)
 im.seg.int=im.seg*255 # get integer values
 ## visualize the segmentation on top of the original image
@@ -84,12 +113,12 @@ for (i in (1:dim(im)[1])){
     im.white[i,j,]=ifelse(im.seg.int[i,j,1]==v[4],c(1,1,1),c(0,0,0))
   }
 }
-#grid.raster(im.back)
-#grid.raster(im.csf)
-#grid.raster(im.grey)
-#grid.raster(im.white)
-## visualize the white matter only on the original image
-#grid.raster(im*im.white)
+# grid.raster(im.back)
+# grid.raster(im.csf)
+# grid.raster(im.grey)
+# grid.raster(im.white)
+# # visualize the white matter only on the original image
+# grid.raster(im*im.white)
 ##########################
 ## extract the data for the clustering
 ##########################
@@ -102,21 +131,43 @@ for (i in (1:dim(im)[1])){
   for (j in (1:dim(im)[2])){
     if (!im.back[i,j,1]){
       if (index==1){
-        print(i)
-        print(j)
       }
       d[index,]=as.vector(im[(i-2):(i+2),(j-2):(j+2),1])
-      coords[index,]=as.vector(c(i,j)) 
+      coords[index,]=as.vector(c(i,j))
       index=index+1
     }
   }
 }
 # ## visualize the blocks
 # 
-im2=im
-im2[(61-2):(61+2),(109-2):(109+2),1]*255
-im2[(61-2):(61+2),(109-2):(109+2),]=c(0,1,1)
-grid.raster(im2)
+# im2=im
+# im2[(61-2):(61+2),(109-2):(109+2),1]*255
+# im2[(61-2):(61+2),(109-2):(109+2),]=c(0,1,1)
+# grid.raster(im2)
+
+# <------------- skip return 
+# make responcibility matrix
+r <- matrix(0,nrow = n, ncol = 3)
+
+# E step
+
+
+for(i in seq(dim(r)[1])){
+  for(k in length(PI)){
+    r[i,k] <- PI[1]*dmvnorm(x = d[i,], mean = MU[[1]], sigma = SIGMA[[1]])/
+      sum(PI[1]*dmvnorm(x = d[i,], mean = MU[[1]], sigma = SIGMA[[1]]),
+          PI[2]*dmvnorm(x = d[i,], mean = MU[[2]], sigma = SIGMA[[2]]),
+          PI[3]*dmvnorm(x = d[i,], mean = MU[[3]], sigma = SIGMA[[3]]))
+  }
+}
+
+# M step
+# pi_k
+
+PI <- colSums(r)/n
+  
+MU <- apply(array, margin, ...)
+
 
 clst <- cbind(coords,data$membership)
 clst <- as.data.frame(clst)
