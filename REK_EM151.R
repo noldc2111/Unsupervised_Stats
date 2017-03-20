@@ -16,11 +16,13 @@ data <- data.frame(data[,2:26])
 data <- data*255
 data$membership <- 0
 dnum <- as.matrix(data[,1:25])
-# initialize means
+# initialize parameters
+#number of clusters
+K = 3
 # picking 3 based on low, med, high
-M1 <- rep(1,25)/255
+M1 <- rep(70,25)/255
 M2 <- rep(128,25)/255
-M3 <- rep(255,25)/255
+M3 <- rep(200,25)/255
 
 # mixture p's
 PI1 <- .33
@@ -148,37 +150,83 @@ for (i in (1:dim(im)[1])){
 # <------------- skip return 
 # make responcibility matrix
 r <- matrix(0,nrow = n, ncol = 3)
-
-# E step
-
-
-for(i in seq(dim(r)[1])){
-  b = PI[1]*dmvnorm(x = d[i,], mean = MU[[1]], sigma = SIGMA[[1]]) +
-      PI[2]*dmvnorm(x = d[i,], mean = MU[[2]], sigma = SIGMA[[2]]) +
-      PI[3]*dmvnorm(x = d[i,], mean = MU[[3]], sigma = SIGMA[[3]])
-  for(k in length(PI)){
-    r[i,k] <- PI[k]*dmvnorm(x = d[i,], mean = MU[[k]], sigma = SIGMA[[k]])/b
+############ EM block
+##### ERASE AFTER REFACTOR!!!!!!!#####
+MU <- list(m1=M1,m2=M2,m3=M3) # list access element [[1]]
+PI <- c(PI1,PI2,PI3)
+SIGMA <- list(sig1, sig2, sig3)
+################################
+index = 0
+repeat{
+  index = index + 1
+  # E step
+  ##### Troubleshooting ##### E step
+  test <- function(x,mean,sigma){
+    return(1)
   }
-}
+
+
+  for(i in seq(dim(r)[1])){
+    b = PI[1]*dmvnorm(x = d[i,], mean = MU[[1]], sigma = SIGMA[[1]]) +
+        PI[2]*dmvnorm(x = d[i,], mean = MU[[2]], sigma = SIGMA[[2]]) +
+        PI[3]*dmvnorm(x = d[i,], mean = MU[[3]], sigma = SIGMA[[3]])
+    for(k in seq(length(PI))){
+      r[i,k] <- PI[k]*dmvnorm(x = d[i,], mean = MU[[k]], sigma = SIGMA[[k]])/b
+    }
+  }
 
 # M step
 # pi_k
+  R <- colSums(r)
+  PI <- R/n
 
-PI <- colSums(r)/n
   
-MU <- apply(array, margin, ...)
+  # updating mu r_ik
+  rik_xi <- list(rep(0,25),rep(0,25),rep(0,25))
+  for(i in seq(n)){
+    for(k in seq(K)){
+      rik_xi[[k]] = rik_xi[[k]] + r[[i,k]]*d[i,]
+    }
+  }
+  for(k in seq(k)){
+    MU[[k]] <- rik_xi[[k]]/R[k] 
+  }
 
+# updating sigma_k
+
+# takes xi vector and mu_k vector returns squared distance vector
+  distance <- function(xi, mu_k){
+    return((xi-mu_k)%*%t(xi-mu_k))
+  }
+
+  rik_dist <- list(rep(0,25),rep(0,25),rep(0,25))
+  for(i in seq(n)){
+    for(k in seq(K)){
+      rik_dist[[k]] = rik_dist[[k]] + distance(d[i,],MU[[k]])
+    }
+  }
+  for(k in seq(k)){
+    SIGMA[[k]] <- rik_dist[[k]]/R[k]
+  }
+if(index>10){break}
+}
+########### end em
+
+#### assign membership
+for(i in seq(n)){
+  data$membership[i] <- which.max(r[i,])
+}
 
 clst <- cbind(coords,data$membership)
 clst <- as.data.frame(clst)
 names(clst) <- c('x','y','membership')
 clst$value <- lapply(clst$membership,function(x){
   if(x==1){
-    mean(M1)/255
+    mean(MU[[1]])
   } else if(x==2){
-    mean(M2)/255
+    mean(MU[[2]])
   } else {
-    mean(M3)/255
+    mean(MU[[3]])
   }
 })
 im3 <- im
