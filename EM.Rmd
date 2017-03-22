@@ -11,6 +11,7 @@ Going from my em151 to here to do a better job of refactoring
 library(png)
 library(grid)
 library(mvtnorm)
+library(MASS)
 #rm(list=ls())
 ```
 
@@ -129,6 +130,150 @@ distance <- function(xi, mu_k){
   return((xi-mu_k)%*%t(xi-mu_k))
 }
 ```
+
+# Test with simulated data
+```{r}
+rm(list = ls())
+# 2d simulated data x dim is R{1...p} xi-xn
+n <- 2000
+p <- 2
+K <- 3
+PI <- c(.3,.3,.4) # actual
+
+MU <- matrix(0, nrow = K, ncol = p) # actual MUs
+MU[1,] <- c(1,1)
+MU[2,] <- c(5,5)
+MU[3,] <- c(5,1)
+#plot(MU)
+
+SIG <- list(diag(1,p,p),diag(1,p,p),diag(1,p,p)) # actual sigmas
+
+
+Y <- seq(K) #set of labels
+y <- sample(Y,n,T,PI) # simulated labels for data
+
+# generating x data
+x <- matrix(0,nrow = n,ncol = p)
+for(i in seq(n)){
+  x[i,] <- mvrnorm(1,MU[y[i],],SIG[[y[i]]])
+}
+#plot of x
+plot(x)
+```
+## EM on test simulation
+```{r}
+# don't have any of the labels
+# initial guesses
+pi <- c(.33,.33,.34)
+mu <- matrix(0, nrow = K, ncol = p)
+mu[1,] <- c(1,10)
+mu[2,] <- c(-2,2)
+mu[3,] <- c(3,30)
+
+sig <- list(diag(1,p,p),diag(1,p,p),diag(1,p,p)) # initial matches actual
+
+# initialize r (nxk) matrix of responsibilities
+r <- matrix(0, nrow = n, ncol = K)
+
+
+
+# initial E for initial likelihood calculation
+# E-step
+for(i in seq(n)){
+  denom <- 0
+  for(k in seq(K)){
+    denom <- denom + pi[k]*dmvnorm(x[i,],mu[k,],sig[[k]])
+  }
+  for(k in seq(K)){
+    r[i,k] <- (pi[k]*dmvnorm(x[i,],mu[k,],sig[[k]]))/denom
+  }
+}
+
+# r check
+R <- colSums(r)
+n == sum(R)
+head(rowSums(r))
+
+# log likelihood
+# log likelihood of pi mixture
+lpi <- function(r, pi){
+  l = 0
+  for(i in seq(dim(r)[1])){
+    for(k in seq(dim(r)[2])){
+      l = l + r[i,k]*log(pi[k]) 
+    }
+  }
+  return(l)
+}
+l_pi <- lpi(r, pi)
+# log likelihood of theta
+ltheta <- function(r,x,mu,sig){
+  l=0
+  for(i in seq(dim(r)[1])){
+    for(k in seq(dim(r)[2])){
+      l = l + r[i,k]*dmvnorm(x[i,], mu[k,], sig[[k]],log = T) 
+    }
+  }
+  return(l)
+}
+
+l_th <- ltheta(r,x,mu,sig)
+
+likelihood <- function(lpi,ltheta){
+  return(sum(ltheta,lpi))
+}
+
+l_tot <- likelihood(l_th,l_pi)
+epsilon <- 10
+# done with initializations and initial checks
+
+# EM
+repeat{
+  l_tot_pre <- l_tot
+  # E-step
+  for(i in seq(n)){
+    denom <- 0
+    for(k in seq(K)){
+      denom <- denom + pi[k]*dmvnorm(x[i,],mu[k,],sig[[k]])
+    }
+    for(k in seq(K)){
+      r[i,k] <- (pi[k]*dmvnorm(x[i,],mu[k,],sig[[k]]))/denom
+    }
+  }
+  
+  # M-step
+  # pi update
+  R <- colSums(r)
+  for(k in seq(K)){
+    pi <- R/n
+  }
+  
+  # mu update
+  for(k in seq(K)){
+    if(R[k] != 0){
+       mu[k,] <- colSums(r[,k]*x)/R[k]
+    }
+  }
+  
+  # sigma update
+  for(i in seq(n)){
+    for(k in seq(K)){
+      sig[[k]] <- sig[[k]] + r[i,k]*x[i,]%*%t(x[i,])
+    }
+  } 
+  for(k in seq(K)){
+    if(R[k] != 0){
+      sig[[k]] <- sig[[k]]/R[k] - mu[k,]%*%t(mu[k,])
+    }
+  }
+l_tot <- likelihood(ltheta(r = r,x = x,mu = mu,sig = sig),lpi(r = r,pi = pi))
+print(l_tot)
+if((l_tot-l_tot_pre)^2 < epsilon){break}
+}
+
+```
+
+
 
 #EM
 ![](./gmmEmMurphy.png)

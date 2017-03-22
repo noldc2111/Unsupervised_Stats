@@ -77,7 +77,7 @@ y <- sample(Y,n,T,Pi)
 #generate appropriate x samples from label
 x <- rep(0,n)
 for(i in seq(n)){
-  x[i] <- rnorm(1,mu[y[i]],sig[y[i]])
+  x[i,] <- rnorm(1,mu[y[i]],sig[y[i]])
 }
 #plot of x
 plot(x,rep(0,n))
