@@ -5,7 +5,7 @@ date: "3/19/2017"
 output: html_document
 ---
 
-Going from my em151 to here to do a better job of refactoring
+
 
 ```{r, echo=FALSE}
 library(png)
@@ -23,15 +23,107 @@ rm(list=ls())
 # }
 # grid.raster(mu_vis)
 ```
-preprocess from lisa
-```{r}
-imL <- readPNG("./LisaData/001_4_orig.png")
-grid.raster(imL)
 
+
+
+The data from Dr. Silbert is segmented with 4 labels. We included the white matter legions as white matter
+
+```{r}
+# preprocess from lisa
+im <- readPNG("./LisaData/001_4_orig.png")
+#grid.raster(im)
+### getting the picture
+im.seg=readPNG("./LisaData/001_4_seg.png")
+
+white = c(1,1,1)
+yellow = c(1,1,0) # white matter lesions
+red = c(1,0,0) # csf
+green = c(0,1,0) # white matter
+blue = c(0,0,1) # grey matter
+black = c(0,0,0)
+im.back=im
+im.csf=im
+im.grey=im
+im.white=im
+for (i in (1:dim(im)[1])){
+  for (j in (1:dim(im)[2])){
+    if(all(im.seg[i,j,]==red)){
+      for(c in seq(3)){im.csf[i,j,c]=white[c]}
+    }
+    else{
+      for(c in seq(3)){im.csf[i,j,c]=black[c]}
+    }
+    if(all(im.seg[i,j,]== yellow) || all(im.seg[i,j,]== green)){
+      for(c in seq(3)){im.white[i,j,c]=white[c]}
+    }
+    else{
+      for(c in seq(3)){im.white[i,j,c]=black[c]}
+    }
+    if(all(im.seg[i,j,]==blue)){
+      for(c in seq(3)){im.grey[i,j,c]=white[c]}
+    }
+    else{
+      for(c in seq(3)){im.grey[i,j,c]=black[c]}
+    }
+  }
+}
+# grid.raster(im.back)
+grid.raster(im.csf)
+grid.raster(im.grey)
+grid.raster(im.white)
+
+
+im.total <- im.csf+im.grey+im.white
+for (i in (1:dim(im)[1])){
+  for (j in (1:dim(im)[2])){
+    im.back[i,j,]=ifelse(im.total[i,j,1]==0,c(1,1,1),c(0,0,0)) # just not the others
+  }
+}
+grid.raster(im.back)
+# # visualize the white matter only on the original image
+# grid.raster(im*im.white)
+##########################
+## extract the data for the clustering
+##########################
+
+n = sum(!im.back[,,1])
+coords=matrix(nrow=n, ncol=2)
+index = 1
+d=matrix(nrow=n,ncol=25)
+for (i in (1:dim(im)[1])){
+  for (j in (1:dim(im)[2])){
+    if (!im.back[i,j,1]){
+      if (index==1){
+      }
+      d[index,]=as.vector(im[(i-2):(i+2),(j-2):(j+2),1])
+      coords[index,]=as.vector(c(i,j))
+      index=index+1
+    }
+  }
+}
+# ## visualize the blocks
+# 
+# im2=im.seg.int/255
+# im2 = im.seg
+# x=dim(im2)[1]/2
+# j=dim(im2)[2]/2-15
+# a=50
+# yellow = c(1,1,0) # white matter lesions
+# red = c(1,0,0) # csf
+# green = c(0,1,0) # white matter
+# blue = c(0,0,1) # grey matter
+# for(c in seq(3)){
+#   im2[(x-a):(x+a),(j-a):(j+a),c]=green[c]
+# }
+# 
+# grid.raster(im2)
+# 
+# im2[x,j,1]
 ```
 
-preprocess image from Bruno
+# The 151 image from Bruno's dataset
 ```{r}
+# preprocess image from Bruno
 ### getting the picture
 im=readPNG("./BrunoData/training_ss_151.png")
 #grid.raster(im)
@@ -63,7 +155,7 @@ for (i in (1:dim(im)[1])){
     im.white[i,j,]=ifelse(im.seg.int[i,j,1]==v[4],c(1,1,1),c(0,0,0))
   }
 }
-# grid.raster(im.back)
+#grid.raster(im.back)
 # grid.raster(im.csf)
 # grid.raster(im.grey)
 # grid.raster(im.white)
@@ -80,8 +172,6 @@ d=matrix(nrow=n,ncol=25)
 for (i in (1:dim(im)[1])){
   for (j in (1:dim(im)[2])){
     if (!im.back[i,j,1]){
-      if (index==1){
-      }
       d[index,]=as.vector(im[(i-2):(i+2),(j-2):(j+2),1])
       coords[index,]=as.vector(c(i,j))
       index=index+1
@@ -124,8 +214,8 @@ mem <- function(drow,M1,M2,M3){
 
 # couldn't figure apply
 
-epsilon <- 120
-while(epsilon > 10){
+epsilon <- 12000000
+while(epsilon > 10000){
   # assign membership
   for(i in 1:dim(data)[1]){
     data$membership[i] <- mem(dnum[i,],M1,M2,M3)
@@ -168,7 +258,7 @@ grid.raster(im3)
 
 ```
 
-Initialize wed 5pm
+
 ```{r}
 n <- dim(data)[1]
 p <- 25
@@ -206,9 +296,15 @@ for(i in seq(n)){
   }
 }
 
-# r check
+# r check and resize for NaN's
+dnum<-subset(dnum, (!is.na(r[,1])) & (!is.na(r[,2])) & (!is.na(r[,3])))
+r<-subset(r, (!is.na(r[,1])) & (!is.na(r[,2])) & (!is.na(r[,3])))
+n <- dim(r)[1]
+# if false something is wrong
+all(dim(r)==dim(dnum))
+
 R <- colSums(r)
-n == sum(R)
+if(!(n == sum(R))){}
 head(rowSums(r))
 
 # log likelihood
@@ -317,7 +413,8 @@ grid.raster(im3)
 ```
 
 
-# Test with simulated data
+# Test with simulated data to check for errors.
+We found extreme sensitivity to initial conditions. The algorithm cannot deal with a density = 0 or an empty cluster.
 ```{}
 rm(list = ls())
 # 2d simulated data x dim is R{1...p} xi-xn
