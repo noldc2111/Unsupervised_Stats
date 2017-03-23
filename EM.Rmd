@@ -12,7 +12,22 @@ library(png)
 library(grid)
 library(mvtnorm)
 library(MASS)
-#rm(list=ls())
+rm(list=ls())
+
+### scrap
+# visualizing mu
+# mu_vis <- array(0,dim = c(25,25,3))
+# for(i in seq(5)){
+#   for(j in seq(5))
+#   mu_vis[i,j,] <- mu[3,i]/255
+# }
+# grid.raster(mu_vis)
+```
+preprocess from lisa
+```{r}
+imL <- readPNG("./LisaData/001_4_orig.png")
+grid.raster(imL)
+
 ```
 
 preprocess image from Bruno
@@ -80,59 +95,230 @@ for (i in (1:dim(im)[1])){
 # im2[(61-2):(61+2),(109-2):(109+2),]=c(0,1,1)
 # grid.raster(im2)
 
+
 ```
 
-Initialize
+kmeans 
 ```{r}
+
 data <- data.frame(d)
+# integer values
+data <- data*255
 data$membership <- 0
+dnum <- as.matrix(data[,1:25])
+# initialize means
+# picking 3 based on low, med, high
+M1 <- rep(1,25)
+M2 <- rep(128,25)
+M3 <- rep(255,25)
 
-# initialize parameters
-# number of clusters
-K = 3
-# data points
-N = dim(d)[1]
-# picking 3 mu_s based on low, med, high
-M1 <- rep(70,25)/255
-M2 <- rep(128,25)/255
-M3 <- rep(200,25)/255
 
-# mixture p's
-PI1 <- .33
-PI2 <- .33
-PI3 <- .34
-
-# initial Sigmas the A^t*A method may be producing too low prob
-# A1 <- matrix(runif(25*25),25)
-# sig1 <- t(A1)%*%A1
-# A2 <- matrix(runif(25*25),25)
-# sig2 <- t(A2)%*%A2
-# A3 <- matrix(runif(25*25),25)
-# sig3 <- t(A3)%*%A3
-
-# checking the Diagnal matrix with variance of 230 to see if density is higher for mvdnorm
-
-sig1 <- diag(x=.3,nrow = 25,ncol = 25)
-sig2 <- diag(x=.4,nrow = 25,ncol = 25)
-sig3 <- diag(x=.5,nrow = 25,ncol = 25)
-
-# initialize parameters
-MU <- list(m1=M1,m2=M2,m3=M3) # list access element [[1]]
-MU_UP <- list(m1=M1,m2=M2,m3=M3)
-PI <- c(PI1,PI2,PI3)
-SIGMA <- list(sig1, sig2, sig3)
-
-# make responcibility matrix
-r <- matrix(0,nrow = n, ncol = 3)
-
-# takes xi vector and mu_k vector returns squared distance vector
-distance <- function(xi, mu_k){
-  return((xi-mu_k)%*%t(xi-mu_k))
+# data is a row of data for use in apply
+mem <- function(drow,M1,M2,M3){
+  dist<- c(0,0,0)
+  dist[1] <- (drow-M1)%*%(drow-M1)
+  dist[2] <- (drow-M2)%*%(drow-M2)
+  dist[3] <- (drow-M3)%*%(drow-M3)
+  return(which.min(dist))
 }
+
+# couldn't figure apply
+
+epsilon <- 120
+while(epsilon > 10){
+  # assign membership
+  for(i in 1:dim(data)[1]){
+    data$membership[i] <- mem(dnum[i,],M1,M2,M3)
+  }
+# update centroid
+  M1_up <- apply(subset(data,data$membership==1),2,mean)[-26]
+  M2_up <- apply(subset(data,data$membership==2),2,mean)[-26]
+  M3_up <- apply(subset(data,data$membership==3),2,mean)[-26]
+
+  epsilon <- sum(c((M1_up-M1)^2,(M2_up-M2)^2,(M3_up-M3)^2))
+  M1 <- M1_up
+  M2 <- M2_up
+  M3 <- M3_up
+}
+# two ways 
+# b = apply(a,2,mean)
+#  c = colMeans(a)
+
+clst <- cbind(coords,data$membership)
+clst <- as.data.frame(clst)
+names(clst) <- c('x','y','membership')
+clst$value <- lapply(clst$membership,function(x){
+  if(x==1){
+    mean(M1)/255
+  } else if(x==2){
+    mean(M2)/255
+  } else {
+    mean(M3)/255
+  }
+})
+im3 <- im
+a = 0
+for(i in 1:dim(clst)[1]){
+  im3[clst$x[i],clst$y[i],] <- clst$value[[i]]
+}
+grid.raster(im3)
+#writePNG(im3,'./Data/REK_kmeans151.png')
+
+
+
 ```
+
+Initialize wed 5pm
+```{r}
+n <- dim(data)[1]
+p <- 25
+K <- 3
+
+
+pi <- matrix(1, ncol = K)/K # max H
+mu <- matrix(0, nrow = K, ncol = p)
+sig_dim = matrix(0, nrow = p, ncol = p)
+sig <- list(sig_dim, sig_dim, sig_dim)
+
+# from k-means and data is d*255
+for(k in seq(K)){
+  mu[k,] = apply(subset(data,data$membership==k)[,-26],2,mean)
+}
+
+for(k in seq(K)){
+  sig[[k]] = cov(subset(data,data$membership==k)[,-26])
+}
+
+# initialize r (nxk) matrix of responsibilities
+r <- matrix(0, nrow = n, ncol = K)
+
+
+
+# initial E for initial likelihood calculation
+# E-step
+for(i in seq(n)){
+  denom <- 0
+  for(k in seq(K)){
+    denom <- denom + pi[k]*dmvnorm(dnum[i,],mu[k,],sig[[k]])
+  }
+  for(k in seq(K)){
+    r[i,k] <- (pi[k]*dmvnorm(dnum[i,],mu[k,],sig[[k]]))/denom
+  }
+}
+
+# r check
+R <- colSums(r)
+n == sum(R)
+head(rowSums(r))
+
+# log likelihood
+# log likelihood of pi mixture
+lpi <- function(r, pi){
+  l = 0
+  for(i in seq(dim(r)[1])){
+    for(k in seq(dim(r)[2])){
+      l = l + r[i,k]*log(pi[k]) 
+    }
+  }
+  return(l)
+}
+l_pi <- lpi(r, pi)
+# log likelihood of theta
+ltheta <- function(r,x,mu,sig){
+  l=0
+  for(i in seq(dim(r)[1])){
+    for(k in seq(dim(r)[2])){
+      l = l + r[i,k]*dmvnorm(x[i,], mu[k,], sig[[k]],log = T) 
+    }
+  }
+  return(l)
+}
+
+l_th <- ltheta(r,dnum,mu,sig)
+
+likelihood <- function(lpi,ltheta){
+  return(sum(ltheta,lpi))
+}
+
+l_tot <- likelihood(l_th,l_pi)
+epsilon <- 1000
+# done with initializations and initial checks
+
+# EM
+repeat{
+  l_tot_pre <- l_tot
+  # E-step
+  for(i in seq(n)){
+    denom <- 0
+    for(k in seq(K)){
+      denom <- denom + pi[k]*dmvnorm(dnum[i,],mu[k,],sig[[k]])
+    }
+    for(k in seq(K)){
+      r[i,k] <- (pi[k]*dmvnorm(dnum[i,],mu[k,],sig[[k]]))/denom
+    }
+  }
+  
+  # M-step
+  # pi update
+  R <- colSums(r)
+  pi <- R/n
+  
+  # mu update
+  for(k in seq(K)){
+    if(R[k] != 0){
+       mu[k,] <- colSums(r[,k]*dnum)/R[k]
+    }
+  }
+  
+  # sigma update
+  for(i in seq(n)){
+    for(k in seq(K)){
+      sig[[k]] <- sig[[k]] + r[i,k]*dnum[i,]%*%t(dnum[i,])
+    }
+  } 
+  for(k in seq(K)){
+    if(R[k] != 0){
+      sig[[k]] <- sig[[k]]/R[k] - mu[k,]%*%t(mu[k,])
+    }
+  }
+l_tot <- likelihood(ltheta(r = r,x = dnum,mu = mu,sig = sig),lpi(r = r,pi = pi))
+print(l_tot)
+if((l_tot-l_tot_pre)^2 < epsilon){break}
+}
+
+```
+
+EM
+Visualize results
+```{r}
+#### assign membership
+for(i in seq(n)){
+  data$membership[i] <- which.max(r[i,])
+}
+
+clst <- cbind(coords,data$membership)
+clst <- as.data.frame(clst)
+names(clst) <- c('x','y','membership')
+clst$value <- lapply(clst$membership,function(x){
+  if(x==1){
+    mean(mu[1,])/255
+  } else if(x==2){
+    mean(mu[2,])/255
+  } else {
+    mean(mu[3,])/255
+  }
+})
+im3 <- im
+
+for(i in 1:dim(clst)[1]){
+  im3[clst$x[i],clst$y[i],] <- clst$value[[i]]
+}
+grid.raster(im3)
+```
+
 
 # Test with simulated data
-```{r}
+```{}
 rm(list = ls())
 # 2d simulated data x dim is R{1...p} xi-xn
 n <- 2000
@@ -161,14 +347,14 @@ for(i in seq(n)){
 plot(x)
 ```
 ## EM on test simulation
-```{r}
+```{}
 # don't have any of the labels
 # initial guesses
 pi <- c(.33,.33,.34)
 mu <- matrix(0, nrow = K, ncol = p)
-mu[1,] <- c(1,10)
-mu[2,] <- c(-2,2)
-mu[3,] <- c(3,30)
+mu[1,] <- c(1,1)
+mu[2,] <- c(2,2)
+mu[3,] <- c(3,3)
 
 sig <- list(diag(1,p,p),diag(1,p,p),diag(1,p,p)) # initial matches actual
 
@@ -244,9 +430,7 @@ repeat{
   # M-step
   # pi update
   R <- colSums(r)
-  for(k in seq(K)){
-    pi <- R/n
-  }
+  pi <- R/n
   
   # mu update
   for(k in seq(K)){
@@ -270,8 +454,68 @@ l_tot <- likelihood(ltheta(r = r,x = x,mu = mu,sig = sig),lpi(r = r,pi = pi))
 print(l_tot)
 if((l_tot-l_tot_pre)^2 < epsilon){break}
 }
+plot(mu)
 
+data <- data.frame(x=x,y=y)
+
+# # test to see if cov works as expected
+# for(k in seq(K)){
+#   sig[[k]] = cov(subset(x,data$y==k)[,-26])
+# }
 ```
+
+
+
+Initialize -- [depreciated]
+```{}
+data <- data.frame(d)
+data$membership <- 0
+
+# initialize parameters
+# number of clusters
+K = 3
+# data points
+N = dim(d)[1]
+# picking 3 mu_s based on low, med, high
+M1 <- rep(70,25)/255
+M2 <- rep(128,25)/255
+M3 <- rep(200,25)/255
+
+# mixture p's
+PI1 <- .33
+PI2 <- .33
+PI3 <- .34
+
+# initial Sigmas the A^t*A method may be producing too low prob
+# A1 <- matrix(runif(25*25),25)
+# sig1 <- t(A1)%*%A1
+# A2 <- matrix(runif(25*25),25)
+# sig2 <- t(A2)%*%A2
+# A3 <- matrix(runif(25*25),25)
+# sig3 <- t(A3)%*%A3
+
+# checking the Diagnal matrix with variance of 230 to see if density is higher for mvdnorm
+
+sig1 <- diag(x=.3,nrow = 25,ncol = 25)
+sig2 <- diag(x=.4,nrow = 25,ncol = 25)
+sig3 <- diag(x=.5,nrow = 25,ncol = 25)
+
+# initialize parameters
+MU <- list(m1=M1,m2=M2,m3=M3) # list access element [[1]]
+MU_UP <- list(m1=M1,m2=M2,m3=M3)
+PI <- c(PI1,PI2,PI3)
+SIGMA <- list(sig1, sig2, sig3)
+
+# make responcibility matrix
+r <- matrix(0,nrow = n, ncol = 3)
+
+# takes xi vector and mu_k vector returns squared distance vector
+distance <- function(xi, mu_k){
+  return((xi-mu_k)%*%t(xi-mu_k))
+}
+```
+
+
 
 
 
@@ -326,30 +570,5 @@ if(index>4){break}
 ########### end em
 
 ```
-Visualize results
-```{}
-#### assign membership
-for(i in seq(n)){
-  data$membership[i] <- which.max(r[i,])
-}
 
-clst <- cbind(coords,data$membership)
-clst <- as.data.frame(clst)
-names(clst) <- c('x','y','membership')
-clst$value <- lapply(clst$membership,function(x){
-  if(x==1){
-    mean(MU[[1]])
-  } else if(x==2){
-    mean(MU[[2]])
-  } else {
-    mean(MU[[3]])
-  }
-})
-im3 <- im
-a = 0
-for(i in 1:dim(clst)[1]){
-  im3[clst$x[i],clst$y[i],] <- clst$value[[i]]
-}
-grid.raster(im3)
-```
 

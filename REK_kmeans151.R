@@ -7,7 +7,7 @@ library(grid)
 #setwd("/Users/kramerPro/Google Drive/Graphical models stat II/code")
 
 # data
-data <- read.csv("training_ss_151_blocks.csv")
+data <- read.csv("./BrunoData/training_ss_151_blocks.csv")
 
 # first dim is a repeat of index
 data <- data.frame(data[,2:26])
@@ -54,8 +54,8 @@ while(epsilon > 10){
 #  c = colMeans(a)
 
 ### getting the picture
-im=readPNG("training_ss_151.png")
-grid.raster(im)
+im=readPNG("./BrunoData/training_ss_151.png")
+#grid.raster(im)
 
 ## im has 3 color channels. Since the original image is a grey level image
 ## all 3 channels are identical
@@ -63,8 +63,8 @@ grid.raster(im)
 ## the second dimension is horizontal, left to right
 
 ## read the associated segmented image
-im.seg=readPNG("training_seg_151.png")
-grid.raster(im.seg)
+im.seg=readPNG("./BrunoData/training_seg_151.png")
+#grid.raster(im.seg)
 im.seg.int=im.seg*255 # get integer values
 ## visualize the segmentation on top of the original image
 # a trick to get the numeric values associated with each label
@@ -116,7 +116,7 @@ for (i in (1:dim(im)[1])){
 im2=im
 im2[(61-2):(61+2),(109-2):(109+2),1]*255
 im2[(61-2):(61+2),(109-2):(109+2),]=c(0,1,1)
-grid.raster(im2)
+#grid.raster(im2)
 
 clst <- cbind(coords,data$membership)
 clst <- as.data.frame(clst)
@@ -136,4 +136,4 @@ for(i in 1:dim(clst)[1]){
   im3[clst$x[i],clst$y[i],] <- clst$value[[i]]
 }
 grid.raster(im3)
-writePNG(im3,'REK_kmeans151.png')
+writePNG(im3,'./Data/REK_kmeans151.png')
